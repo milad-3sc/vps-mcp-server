@@ -42,13 +42,14 @@ print_connection_details() {
 
 MCP server is running.
 Local endpoint:  http://127.0.0.1:${PORT}
-Bearer token:    ${BEARER_TOKEN}
+Health check:     http://127.0.0.1:${PORT}/healthz
 Log file:        ${LOG_FILE}
 EOF
 
   if [ -n "$codespace_url" ]; then
     cat <<EOF
 Codespaces URL:  ${codespace_url}
+Browser test:    ${codespace_url}/healthz
 
 If you need the port visible outside the Codespace, expose port ${PORT} in the Ports tab.
 EOF
@@ -76,19 +77,10 @@ cd "$REPO_DIR"
 echo "Installing npm dependencies..."
 npm ci --omit=dev
 
-if [ -n "${BEARER_TOKEN:-}" ]; then
-  :
-elif [ -n "${GITHUB_TOKEN:-}" ]; then
-  BEARER_TOKEN="$GITHUB_TOKEN"
-else
-  echo "GITHUB_TOKEN is required in the Codespaces environment." >&2
-  exit 1
-fi
-
 stop_existing_server
 
 echo "Starting MCP server on ${HOST}:${PORT}..."
-nohup env PORT="$PORT" HOST="$HOST" BEARER_TOKEN="$BEARER_TOKEN" node "$REPO_DIR/index.js" \
+nohup env PORT="$PORT" HOST="$HOST" node "$REPO_DIR/index.js" \
   >"$LOG_FILE" 2>&1 &
 SERVER_PID=$!
 echo "$SERVER_PID" > "$PID_FILE"
@@ -97,6 +89,13 @@ sleep 2
 if ! kill -0 "$SERVER_PID" 2>/dev/null; then
   echo "The MCP server failed to start. Check $LOG_FILE for details." >&2
   exit 1
+fi
+
+if command -v curl >/dev/null 2>&1; then
+  if ! curl --silent --show-error --fail "http://127.0.0.1:${PORT}/healthz" >/dev/null; then
+    echo "The MCP server started but did not pass the local health check. Check $LOG_FILE for details." >&2
+    exit 1
+  fi
 fi
 
 print_connection_details

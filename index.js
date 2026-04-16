@@ -8,7 +8,7 @@ import { exec } from 'node:child_process';
 import { z } from 'zod';
 
 const PORT = parseInt(process.env.PORT || '8443', 10);
-const BEARER_TOKEN = process.env.BEARER_TOKEN;
+const HOST = process.env.HOST || '0.0.0.0';
 
 // Active sessions: sessionId → StreamableHTTPServerTransport
 const sessions = new Map();
@@ -143,10 +143,9 @@ function readBody(req) {
 }
 
 const httpServer = createServer(async (req, res) => {
-  // Bearer token auth
-  if ((req.headers['authorization'] || '') !== 'Bearer ' + BEARER_TOKEN) {
-    res.writeHead(401, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: 'Unauthorized' }));
+  if (req.url === '/' || req.url === '/healthz') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: true, name: 'operator-filesystem' }));
     return;
   }
 
@@ -201,6 +200,6 @@ const httpServer = createServer(async (req, res) => {
   }
 });
 
-httpServer.listen(PORT, '0.0.0.0', () => {
-  console.log('Operator MCP server listening on port ' + PORT);
+httpServer.listen(PORT, HOST, () => {
+  console.log('Operator MCP server listening on ' + HOST + ':' + PORT);
 });
